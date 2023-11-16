@@ -1,0 +1,494 @@
+---
+title: "Having a Mentor Improves Feelings of Belonging and Mattering for First Year Unversity Students"
+subtitle: "Analysis of a University End of First Year Survey"
+author: "Jayson Webb, PhD"
+date: "11/15/2023"
+bibliography: "references.bib"
+format:
+  html: 
+    theme: cosmo
+    fontsize: 1em
+editor: visual
+execute: 
+  echo: false
+  warning: false
+---
+
+# Introduction
+
+This report is an analysis of data from the 2022 End of First Year Survey administered by a public, four-year university. The survey population includes all new first-year/first-time and transfer students and asks them about numerous aspects of their academic and co-curricular experiences including their sense of belonging and mattering, which will be the focus of this analysis.
+
+```{r}
+
+# load the necessary libraries
+library(sfsmisc)
+library(scales)
+library(DescTools)
+library(MASS)
+library(mirt)
+library(tidyverse)
+library(dplyr)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(parameters)
+library(likert)
+library(ggpubr)
+library(ggplot2)
+
+```
+
+```{r}
+
+# read in the data and prepare it for analysis
+df <- read.csv('survey_data.csv')
+
+#Get question labels to use later
+labels <- names(df)
+qt <- labels[10:16]
+question_text <- c()
+
+for(i in 1:length(qt)){
+  s <- gsub("\\."," ",qt[i])
+  question_text[i] <- trimws(strsplit(s,"statements")[[1]][2])
+  question_text[i] <- gsub('CU Boulder', 'University',question_text[i])
+}
+
+agree_statement <- gsub("\\."," ",qt[1])
+agree_statement <- trimws(strsplit(agree_statement,"I")[[1]][1])
+
+#Recode entry type so T and F are not interpretted as boolean
+#Make entry type a factor
+df$Entry_Type = as.factor(df$Entry_Type)
+levels(df$Entry_Type) = c("First-time","Transfer")
+
+#Provide column names that make the data easier to work with.
+names(df) <- c("ID","housing","mentor","return","race","fa","Entry_type","FirstGen","School","Belong","Fit","Accepted","Connected","Supported","Interested","Care")
+
+df$mentor <- factor(df$mentor,exclude="")
+levels(df$mentor)=c("No","Not sure","Yes")
+
+#Make each of the survey questions an ordered factor
+df$Belong <- ordered(df$Belong,levels=c("Strongly disagree", "Disagree","Slightly disagree","Slightly agree","Agree","Strongly agree"))
+df$Fit <- ordered(df$Fit,levels=c("Strongly disagree", "Disagree","Slightly disagree","Slightly agree","Agree","Strongly agree"))
+df$Accepted <- ordered(df$Accepted,levels=c("Strongly disagree", "Disagree","Slightly disagree","Slightly agree","Agree","Strongly agree"))
+df$Connected <- ordered(df$Connected,levels=c("Strongly disagree", "Disagree","Slightly disagree","Slightly agree","Agree","Strongly agree"))
+df$Supported <- ordered(df$Supported,levels=c("Strongly disagree", "Disagree","Slightly disagree","Slightly agree","Agree","Strongly agree"))
+df$Interested <- ordered(df$Interested,levels=c("Strongly disagree", "Disagree","Slightly disagree","Slightly agree","Agree","Strongly agree"))
+df$Care <- ordered(df$Care,levels=c("Strongly disagree", "Disagree","Slightly disagree","Slightly agree","Agree","Strongly agree"))
+
+```
+
+```{r}
+
+# Create a subset of the data that has longer column names (for the survey questions) that look better when plotted
+sub1_df = df[,c(1,3:4,7,10:16)]
+
+```
+
+The goals for this analysis are:
+
+-   Provide an overall summary of responses to each of the 7 belonging and mattering items.
+-   Summarize survey response differences based on whether or not a student has a mentor (yes vs no).
+
+## Summary of Findings
+
+- **Belonging items get lower ratings than mattering items** - The ratings for items that start with "I..." (I belong, I fit in, I feel a connection) and reference the institution (University/University community) are lower than items that reference how other people/people on campus view the respondent.
+- **Having a mentor improves feelings of belonging and mattering** - Students who indicated they have a mentor are 5% to 39% more likely to give a rating of *Slightly agree* or higher (*Slightly agree+*) to the belonging and mattering items compared to respondents who indicated they do not have a mentor.  Students with a mentor gave higher ratings for all belonging and mattering items, but the effect was most pronounced for the item *`r question_text[4]`*, for which students with a mentor were 21% to 39% more likely to give a rating of *Slightly agree+* compared to students without a mentor.  Students with a mentor were 1.4 to 3.25 times more likely to give a *Strongly agree* response across all items, and 1.9 to 3.25 times more likely for the item *`r question_text[4]`*.
+
+# Belonging and Mattering Items
+
+The belonging and mattering items are shown below. In the survey, each of these is prefaced with *`r agree_statement`* and respondents indicated their agreement using the following response options: *`r levels(df$Belong)`*. The original rationale for dividing these items into belonging and mattering groups was not available as part of this analysis.  The term 'University' replaces the actual name of the university for this report.
+
+```{r}
+bq <- question_text[1:4]
+knitr::kable(bq,col.names="Belonging Items") 
+```
+
+Three of the four belonging items start with "I" and reference how the respondent feels in relation to the institution ("University"/"University community"). Interestingly, the next to last item is worded more like the mattering items below, which all reference the attitudes of other "people on campus" toward the respondent.  However, the belonging item does reference "People at University" rather than "people on campus". So, the most obvious difference between the belonging and mattering items is how the respondent feels in relation to the institution "University"/"University community" (belonging, fit, connection, acceptance) vs how "people on campus" (presumably not the institution) feel about the respondent (caring, interested, supportive). 
+
+```{r}
+mq <- question_text[5:7]
+knitr::kable(mq,col.names="Mattering Items") 
+```
+
+# Results
+
+This section provides evidence that respondents who report having a mentor are more agreeable to the belonging and mattering items than those who do not.  Being more agreeable means being more likely to give one of the agree responses (Slightly agree, Agree, Strongly agree).  We'll look at agreeableness in three ways: *Slightly agree+* refers to giving a response of Slightly agree or higher; *Agree +* means giving a response of Agree or Strongly agree and *Strongly agree* refers to a response of just that highest category.  We'll also see that the relative advantage of having a mentor vs not increases with each of those successive categories.  We'll refer to all the disagree responses collectively as *Slightly disagree-* (Slightly disagree, Disagree, Strongly disagree).
+
+## Summary of responses to the belonging and mattering items
+
+@fig-overall-likert-plot shows the percentage of respondents who chose each response category for the seven belonging and mattering items, sorted from highest to lowest total percentage of *Slightly agree+* responses. The percentages at the end of each bar are the total percentage of *Slightly disagree-* responses (left) or *Slightly agree+* (right) responses. The item labels (y-axis labels) show the number of respondents for each item, which was greater than 1100 in all cases. The items can be thought of as falling into 3 statistically reliable groups in terms of the total percentage of *Slightly agree+* responses: Those greater than 85% *Slightly agree+* responses, which include all of the "people" items; those equal to 85% *Slightly agree+* responses (the "I belong..." item); and those that are below 85% *Slightly agree+* responses (the fit and connection items).
+
+```{r}
+#| label: fig-overall-likert-plot
+#| fig-cap: Overall belonging and mattering ratings
+#| out-width: 100%
+#| fig-width: 8
+#| fig-height: 4
+#| fig-column: page-right
+#| warning: false
+
+qs <- c('Belong','Fit','Accepted','Connected','Supported','Interested','Care')
+
+#Before each summary, customize the labels to have the appropriate n
+count = 0
+qt <- c()
+for (q in qs){
+  q <- as.symbol(q)
+  tmp <- eval(bquote(df %>% filter(!is.na(.(q))) %>% count(.(q))
+  ))
+  count = count+1
+  qt[count] <-  paste0(question_text[count]," ","(n=",sum(tmp$n),")")
+
+}
+
+names(sub1_df) <- c("ID","Mentor","return","Entry_Type",
+                    qt[1],
+                    qt[2],
+                    qt[3],
+                    qt[4],
+                    qt[5],
+                    qt[6],
+                    qt[7]
+)
+
+x <-likert(sub1_df[,5:11])
+p1 <-plot(x,type="bar",panel.background=element_rect(linewidth = 0,fill="white"),
+          legend.position = "bottom",
+
+)
+p1
+
+```
+
+Based on @fig-overall-likert-plot, lower ratings were less the result of how other people on campus view the respondent than the feelings of fit and connection with respect to the institution (University/University community). We will see in the next section that having a mentor leads to higher ratings for all of the belonging and mattering items and most strongly for the item *`r question_text[4]`*.
+
+## Having a mentor improves feelings of belonging and mattering compared to not having a mentor
+
+```{r}
+#prepare some data on the count of different mentor responses to be presented in the text below.
+tmp <- df %>% filter(!is.na(mentor)) %>% count(mentor)
+tot <- sum(tmp$n)
+tmp['percent'] = paste0(as.character(signif(100*tmp$n/tot,2)),"%")
+
+```
+
+@fig-mentor-likert-plot shows responses to the belonging and mattering items segmented by responses to the question *Do you have someone at University you consider a mentor?* which had response options *Yes* (`r tmp[3,3]`, n=`r tmp[3,2]`), *Not sure* (`r tmp[2,3]`, n=`r tmp[2,2]`) and *No* (`r tmp[1,3]`, n=`r tmp[1,2]`). The belonging and mattering items are in the same order they were in @fig-overall-likert-plot.  
+
+For respondents that have a mentor, the percentage of *Slightly agree+* responses is greater than 85% for all items, including the connection and fit items, which were 75% and 80%, respectively, overall (see @fig-overall-likert-plot).  The connection and fit items have the lowest percentage of *Slightly agree+* responses and the highest percentage of *Slightly disagree-* responses for all of the mentor question response categories. Interestingly, the *Not sure* category for the mentor question is much closer to the *Yes* category than to the *No* category in terms of percentage of *Slightly agree+* responses. 
+
+```{r}
+#| label: fig-mentor-likert-plot
+#| fig-cap: Belonging and mattering ratings by response to the question  "Do you have someone at University you consider a mentor?" (Yes, Not sure, No)  
+#| out-width: 100%
+#| fig-width: 8
+#| fig-height: 8
+#| fig-column: page-right
+#| warning: false
+
+
+names(sub1_df) <- c("ID","Mentor","return","Entry_Type",
+                    question_text[1],
+                    question_text[2],
+                    question_text[3],
+                    question_text[4],
+                    question_text[5],
+                    question_text[6],
+                    question_text[7]
+)
+
+#Use a very narrow character to affect sort order and thus panel order for likert plot
+#Working from the bottom up
+s <- "\u200A" #Hair space
+names(sub1_df)[10] <- paste0(s,s,s,s,s,s,s,names(sub1_df)[10])
+names(sub1_df)[7] <- paste0(s,s,s,s,s,s,names(sub1_df)[7])
+names(sub1_df)[11] <- paste0(s,s,s,s,s,names(sub1_df)[11])
+names(sub1_df)[9] <- paste0(s,s,s,s,names(sub1_df)[9])
+names(sub1_df)[5] <- paste0(s,s,s,names(sub1_df)[5])
+names(sub1_df)[6] <- paste0(s,s,names(sub1_df)[6])
+names(sub1_df)[8] <- paste0(s,names(sub1_df)[8])
+
+sub1_df <- sub1_df %>%
+  drop_na(Mentor) 
+
+x <-likert(sub1_df[,5:11],grouping = sub1_df$Mentor)
+
+p1 <-plot(x,type="bar",panel.background=element_rect(linewidth = 0,fill="white"),
+          positive.order=TRUE,
+          legend.position = "bottom",
+          plot.percent.low = TRUE,
+          plot.percent.high = TRUE,
+          plot.percent.neutral = FALSE,
+          plot.percents = TRUE,
+          text.size=3
+)
+p1
+#Check all p-values against this criterion so we can state the general p-value level, p<criterion.
+criterion = 0.0001 
+
+```
+
+The statistical significance of the advantage of having a mentor compared to not having a mentor was confirmed in three different ways.
+
+- A proportional odds ordinal logistic regression was performed for each belonging and mattering item, predicting those responses based on the responses to the mentor question.  Those tests confirm that, for all questions, both mentor = *Yes* and Mentor = *Not sure* respondents were more agreeable than Mentor = *No* respondents, *p* < .0001.  
+- For each item in @tbl-mentor-diffs, a single degree of freedom $\chi^2$ test confirmed that the percentage of *Slightly agree+* responses for those with a mentor was greater than for those without, *p* < .0001.  Similar tests were performed for *Agree+* and *Strongly agree* responses and confirmed the advantage of having a mentor.  Those tables, @tbl-mentor-diffs-agree-plus and @tbl-mentor-diffs-strongly-agree, are shown in the Appendix.
+- @tbl-mentor-diffs shows the relative agreement ratio (RAR), the ratio of the percentage of *Slightly agree+* responses for those with and without a mentor, along with the upper and lower bounds for the 95% confidence interval for the RAR.  If the RAR confidence interval does not contain 1 (a ratio of 1 means two percentages are equal), then the ratio shows a statistically significant advantage, which is true for all of the belonging and mattering items.  Similar tests were performed for *Agree+* and *Strongly agree* responses and confirmed the advantage of having a mentor for those response categories (see @tbl-mentor-diffs-agree-plus and @tbl-mentor-diffs-strongly-agree).  
+
+
+```{r}
+#| label: tbl-mentor-diffs
+#| tbl-cap: Slightly agree+ percentages for those with and without a mentor, the relative agreement ratio (RAR) of those percentages, and the lower and upper bounds of the 95% confidence interval for the RAR.  The table is sorted by descending RAR.
+#| tbl-colwidths: [40,12,12,12,12,12]
+
+# Use these for stepping through questions and segmenting.
+qsx <- c('Belong','Fit','Accepted','Connected','Supported','Interested','Care')
+qs_order <- c(4,2,1,5,7,3,6)
+sf <- 'mentor'
+
+f2 <- as.symbol(sf)
+
+#We'll just append things to each of these lists which represent the columns of the table
+mentor_yes <- c() #Slightly_agree+
+mentor_no <- c()
+mentor_yes2 <- c() #Agree+
+mentor_no2 <- c()
+mentor_yes3 <- c() #Strongly agree
+mentor_no3 <- c()
+
+relative_agree <- c() #Slightly Agree+
+relative_agree2 <- c() #Agree+
+relative_agree3 <- c() #Strongly agree
+
+lower_ci <- c()
+upper_ci <- c()
+lower_ci2 <- c()
+upper_ci2 <- c()
+lower_ci3 <- c()
+upper_ci3 <- c()
+
+#Check all p-values against this criterion so we can state the general p-value level, p<criterion.
+criterion = 0.0001 
+
+for (o in qs_order){
+  q <- as.symbol(qsx[o])
+  #Do the logistic regression, but not reporting it in this report.
+  #We will use it to throw a flag in the document if the p value is not less than the criterion.
+  survey.plr <- eval(bquote(polr(.(q) ~ .(f2), Hess=TRUE,data = df)))
+  ctable <- coef(summary(survey.plr))
+  p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+  ## combined table
+  ctable <- cbind(ctable, "p value" = p)
+  if(p['mentorYes'] > criterion){
+  print(p['mentorYes'],'LR',q)
+}
+
+  #compute the number of each agree response by mentor yes/no
+  comp <- eval(bquote(df %>% 
+                        filter(!is.na(.(q))) %>%
+                        filter(.(f2) != 'Not sure') %>% #only if f is mentor
+                        group_by(.(f2)) %>%
+                        count(.(q)) %>%
+                        mutate(freq = n / sum(n))
+  ))
+  
+  #These elements will be used in the chi-sq test of percentage differences
+  #and the calculation of the error term for the relative agreement ratio
+  #the n and y in the variable names indicate Mentor=No and Mentor=Yes 
+  ###############################################################
+  ybot <- sum(comp$n[7:9])
+  ybot2 <- sum(comp$n[7:10])
+  ybot3 <- sum(comp$n[7:11])
+  ytop_slightly_agree_plus <- sum(comp$n[10:12])
+  ytop_agree_plus <- sum(comp$n[11:12])
+  ytop_strongly_agree <- comp$n[12]
+  ytot <- sum(comp$n[7:12])
+  
+  CIL <-  (ybot/ytop_slightly_agree_plus)/ytot
+  CIL2<-  (ybot2/ytop_agree_plus)/ytot
+  CIL3<-  (ybot3/ytop_strongly_agree)/ytot
+  
+  nbot <- sum(comp$n[1:3])
+  nbot2 <- sum(comp$n[1:4])
+  nbot3 <- sum(comp$n[1:5])
+  ntop_slightly_agree_plus <- sum(comp$n[4:6])
+  ntop_agree_plus <- sum(comp$n[5:6])
+  ntop_strongly_agree <- comp$n[6]
+  ntot <- sum(comp$n[1:6])
+  
+  CIR <-  (nbot/ntop_slightly_agree_plus)/ntot
+  CIR2 <-  (nbot2/ntop_agree_plus)/ntot
+  CIR3 <-  (nbot3/ntop_strongly_agree)/ntot
+  ################################################################
+  
+  # Do the test of proportions for the top 3 agree responses
+  pt <- prop.test(c(ntop_slightly_agree_plus,ytop_slightly_agree_plus),c(ntot,ytot))
+  pt2 <- prop.test(c(ntop_agree_plus,ytop_agree_plus),c(ntot,ytot))
+  pt3 <- prop.test(c(ntop_strongly_agree,ytop_strongly_agree),c(ntot,ytot))
+  #Construct the relative agreement ratio
+  p1 <- pt$estimate[2] #for mentor=Yes
+  p2 <- pt$estimate[1] #for mentor=No
+  p1_2 <-pt2$estimate[2]
+  p2_2 <-pt2$estimate[1]
+  p1_3 <-pt3$estimate[2]
+  p2_3 <-pt3$estimate[1]
+  
+  ra <- p1/p2 #the risk ratio, aka, relative agreement ratio
+  ra2 <- p1_2/p2_2
+  ra3 <- p1_3/p2_3
+  
+mentor_yes <- append(mentor_yes,100*signif(p1,3))
+mentor_no <- append(mentor_no,100*signif(p2,3))
+
+mentor_yes2 <- append(mentor_yes2,100*signif(p1_2,3))
+mentor_no2 <- append(mentor_no2,100*signif(p2_2,3))
+
+mentor_yes3 <- append(mentor_yes3,100*signif(p1_3,3))
+mentor_no3 <- append(mentor_no3,100*signif(p2_3,3))
+
+relative_agree <- append(relative_agree,signif(ra,3))
+relative_agree2 <- append(relative_agree2,signif(ra2,3))
+relative_agree3 <- append(relative_agree3,signif(ra3,3))
+
+  #calculate the CI for the risk ratio using procedure found at 
+  #https://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/BS704_Confidence_Intervals/BS704_Confidence_Intervals8.html
+  
+#Make a function that returns the error part of the confidence interval for the relative risk ratio
+rr_ci <- function(ra,z,cil,cir){
+  err <- z*sqrt(cil+cir)
+  return(err)
+}
+
+error <- rr_ci(ra,1.96,CIL,CIR)
+error2 <- rr_ci(ra2,1.96,CIL2,CIR2)
+error3 <- rr_ci(ra3,1.96,CIL3,CIR3)
+
+lower_ci <- append(lower_ci, signif(exp(log(ra)-error),3) )
+upper_ci <- append(upper_ci, signif(exp(log(ra)+error),3) )
+
+lower_ci2 <- append(lower_ci2, signif(exp(log(ra2)-error2),3) )
+upper_ci2 <- append(upper_ci2, signif(exp(log(ra2)+error2),3) )
+
+lower_ci3 <- append(lower_ci3, signif(exp(log(ra3)-error3),3) )
+upper_ci3 <- append(upper_ci3, signif(exp(log(ra3)+error3),3) )
+
+  
+  if(pt$p.value > criterion){
+  print(pt$p.value,'top 3',q)
+}
+
+  
+}
+
+questions <- c(question_text[qs_order[1]],question_text[qs_order[2]],question_text[qs_order[3]],question_text[qs_order[4]],
+               question_text[qs_order[5]],question_text[qs_order[6]],question_text[qs_order[7]])
+
+#mentor_tests will be presented in a table 
+mentor_tests <- cbind(questions,mentor_yes,mentor_no,relative_agree,lower_ci,upper_ci)
+mentor_tests2 <- cbind(questions,mentor_yes2,mentor_no2,relative_agree2,lower_ci2,upper_ci2)
+mentor_tests3 <- cbind(questions,mentor_yes3,mentor_no3,relative_agree3,lower_ci3,upper_ci3)
+
+#dumbell RAR will be presented in a dumbbell plot a bit later.
+db1_RAR <- as.data.frame(cbind(questions,"Slightly_agree_+",relative_agree))
+rownames(db1_RAR) <- NULL
+names(db1_RAR) <- c("Item","Level","RAR")
+
+
+db2_RAR <- as.data.frame(cbind(questions,"Agree_+",relative_agree2))
+rownames(db2_RAR) <- NULL
+names(db2_RAR) <- c("Item","Level","RAR")
+
+db3_RAR <- as.data.frame(cbind(questions,"Strongly_agree",relative_agree3))
+rownames(db3_RAR) <- NULL
+names(db3_RAR) <- c("Item","Level","RAR")
+db3_RAR <- db3_RAR %>% mutate(Item = fct_reorder(Item, RAR))
+
+dumbell_RAR <- rbind(db3_RAR,db2_RAR,db1_RAR)
+dumbell_RAR$RAR <- as.numeric(dumbell_RAR$RAR)
+dumbell_RAR$Level <- ordered(dumbell_RAR$Level,levels=c("Slightly_agree_+","Agree_+","Strongly_agree"))
+
+mentor_tests <- as.data.frame(mentor_tests)
+rownames(mentor_tests) <- NULL
+names(mentor_tests) <- c("a","b","c","d","e","f") #makes it easier to work with order command next.
+
+mentor_tests <- mentor_tests[with(mentor_tests, order(d,e,decreasing=TRUE)), ]
+names(mentor_tests) <- c("Item","Mentor Slightly agree+","No mentor Slightly agree+","Relative agreement ratio (RAR)","RAR lower bound","RAR upper bound")
+rownames(mentor_tests) <- NULL
+
+knitr::kable(mentor_tests)
+
+```
+
+The relative agreement ratio (RAR) shown in @tbl-mentor-diffs is the ratio of the percent *Slightly agree+* for those with a mentor to the percent *Slightly agree+* for those without a mentor ([more info on percentage ratios](https://measuringu.com/odds/)).  The percent *Slightly agree+* are the same values, to one more decimal place, shown in @fig-mentor-likert-plot.  The RAR for the first item is `r relative_agree[1]` and can be interpreted as "respondents with a mentor are 30% more likely to give a rating of *Slightly agree+* (21% to 39%) than  those without a mentor to the item *`r question_text[4]`*".  The (21% to 39%) comes from the lower and upper bounds for the 95% confidence interval for the RAR.  Looking at the ranges for all of the confidence intervals we could say that those with a mentor are 5% to 39% more agreeable than those without a mentor across all of the items.
+
+@tbl-mentor-diffs is sorted by descending RAR to provide an indication of the relative advantage for having a mentor.  So, having a mentor shows the largest advantage for the item *`r question_text[4]`*. The item order also follows the ascending values for percent *Slightly agree+* for the mentor = *No* condition, with one exception: *`r question_text[7]`*.  The RAR sorted this item into third place, whereas it's percent *Slightly agree+* for mentor = *No* would have had it third from last.
+
+```{r}
+#| label: fig-mentor-RAR-plot
+#| fig-cap: RAR values for Slightly agree+, Agree+ and Strongly agree for each of the belonging and mattering items.
+#| out-width: 100%
+#| fig-width: 8
+#| fig-height: 4
+#| fig-column: page-right
+#| warning: false
+
+my_colors <- c("#c8e6e3","#91cdc7","#5ab4ac")
+#Point is to do a dumbell plot following this code, but with a long dataframe created above.
+ggplot(dumbell_RAR, aes(x = RAR, y = Item )) +
+  geom_line() +
+  geom_point(aes(color = Level), size = 3) +
+  scale_color_manual(values=my_colors) +
+  scale_x_continuous(limits=c(1,2.5)) +
+  scale_y_discrete(labels = label_wrap(40)) +
+  labs(y="") +
+  theme_pubclean()
+
+```
+
+@fig-mentor-RAR-plot shows the RAR values for *Slightly agree+*, *Agree+* and *Strongly agree* response categories sorted by descending *Strongly agree* RAR.  The tables showing confidence intervals for *Agree+* and *Strongly agree* are shown in the Appendix (see @tbl-mentor-diffs-agree-plus and @tbl-mentor-diffs-strongly-agree).  @fig-mentor-RAR-plot shows some interesting trends.  First, the item *`r question_text[4]`* shows the strongest RAR advantage for having a mentor across all three agreement categories.  Second, for all items, the advantage of having a mentor grows from *Slightly agree+* through *Strongly agree*.  Respondents are almost 2.5 times more likely (1.9 to 3.25) to choose *Strongly agree* when they have a mentor compared to not for the question *`r question_text[4]`*.  
+
+# Discussion and Next Steps
+
+Respondents who report having a mentor are more agreeable to the belonging and mattering items than those who do not have a mentor.  That was true when agreeableness was defined as *Slightly agree+*, *Agree+* or *Strongly agree*. The greater agreeableness for those with a mentor vs no mentor was confirmed with three different statistical approaches; proportional odds logistic regression, single degree of freedom $\chi^2$ tests on percentage differences, and relative agreement ratio (RAR) 95% confidence intervals not containing 1.
+
+The effect of having a mentor on belonging and mattering item ratings differs across the items.  @fig-mentor-RAR-plot, @tbl-mentor-diffs, @tbl-mentor-diffs-agree-plus and @tbl-mentor-diffs-strongly-agree show that the item *`r question_text[4]`* always showed the biggest effect of having a mentor, but the relative ranking of the other items differed depending on which agreeableness metric was used. Despite those differences, responses to the survey items are highly intercorrelated and even though they produce different levels of agreement and having a mentor affects them differently, the responses tend to move together, so future work should consider examining if they are part of a single construct.  If so, that would allow a meaningful single number metric to be tracked and presented in dashboards and other reports.
+
+This report only examined the effect of having a mentor.  Future analyses will examine other factors like being a transfer student, which college the respondent is in, and the race of the respondent.
+
+One puzzling aspect of this data is that those who responded "Not sure" to the mentor question are almost as agreeable as those who responded "Yes".  Does "Not sure" mean that it is in process but they just haven't gotten final notification?  It would be interesting to do qualitative follow up on that question.
+
+# Appendix
+
+```{r}
+#| label: tbl-mentor-diffs-agree-plus
+#| tbl-cap: Agree+ percentages for those with and without a mentor, the relative agreement ratio (RAR) of those percentages, and the lower and upper bounds of the 95% confidence interval for the RAR.  The table is sorted by descending RAR.
+#| tbl-colwidths: [40,12,12,12,12,12]
+
+mentor_tests2 <- as.data.frame(mentor_tests2)
+rownames(mentor_tests2) <- NULL
+names(mentor_tests2) <- c("a","b","c","d","e","f") #makes it easier to work with order command next.
+
+mentor_tests2 <- mentor_tests2[with(mentor_tests2, order(d,e,decreasing=TRUE)), ]
+names(mentor_tests2) <- c("Item","Mentor Agree+","No mentor Agree+","Relative agreement ratio (RAR)","RAR lower bound","RAR upper bound")
+rownames(mentor_tests2) <- NULL
+
+knitr::kable(mentor_tests2)
+```
+
+
+```{r}
+#| label: tbl-mentor-diffs-strongly-agree
+#| tbl-cap: Strongly agree percentages for those with and without a mentor, the relative agreement ratio (RAR) of those percentages, and the lower and upper bounds of the 95% confidence interval for the RAR.  The table is sorted by descending RAR.
+#| tbl-colwidths: [40,12,12,12,12,12]
+
+mentor_tests3 <- as.data.frame(mentor_tests3)
+rownames(mentor_tests3) <- NULL
+names(mentor_tests3) <- c("a","b","c","d","e","f") #makes it easier to work with order command next.
+
+mentor_tests3 <- mentor_tests3[with(mentor_tests3, order(d,e,decreasing=TRUE)), ]
+names(mentor_tests3) <- c("Item","Mentor Strongly agree","No mentor Strongly agree","Relative agreement ratio (RAR)","RAR lower bound","RAR upper bound")
+rownames(mentor_tests3) <- NULL
+
+knitr::kable(mentor_tests3)
+```
+
